@@ -19,3 +19,7 @@ Vortex is a sleek, dark-themed GUI application that bypasses YouTube's resolutio
    ```bash
    git clone https://github.com/SmoothCdoer9981/Vortex.git
    cd Vortex
+2. **Install the requirements**
+ ```pip install -r requirements.txt```
+3. **Run ```main.py```**
+   ```python main.py```
