@@ -65,7 +65,7 @@ def search_logic():
             search_btn.configure(state="normal")
             return
 
-        yt_object = YouTube(url, on_progress_callback=on_progress)
+        yt_object = YouTube(url, on_progress_callback=on_progress, client='ANDROID')
         
         video_title_label.configure(text=yt_object.title)
         
