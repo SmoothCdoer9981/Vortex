@@ -77,7 +77,7 @@ def search_logic():
             return
 
         # Added 'ANDROID' client to fix network slow-downs
-        yt_object = YouTube(url, on_progress_callback=on_progress, client='ANDROID')
+        yt_object = YouTube(url, on_progress_callback=on_progress)
         
         video_title_label.configure(text=yt_object.title)
         
