@@ -4,18 +4,13 @@ import threading
 import subprocess
 from tkinter import filedialog
 from pytubefix import YouTube
-
-
 import ssl
 import certifi
 
-
+# --- SSL FIX (CORRECTED) ---
+# This points Python to the correct certificate bundle without crashing
 os.environ["SSL_CERT_FILE"] = certifi.where()
-ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
-
-
-
-
+# ---------------------------
 
 APP_NAME = "Vortex"
 THEME_COLOR = "dark-blue"
@@ -71,12 +66,17 @@ def search_logic():
         update_status("Fetching metadata...", "#3498db")
         search_btn.configure(state="disabled")
         
+        # --- ANIMATION START (Fixes "Is it frozen?" issue) ---
+        progress_bar.configure(mode="indeterminate")
+        progress_bar.start()
+        # -----------------------------------------------------
+        
         url = url_entry.get()
         if not url:
             update_status("Please paste a URL first", ERROR_COLOR)
-            search_btn.configure(state="normal")
             return
 
+        # Added 'ANDROID' client to fix network slow-downs
         yt_object = YouTube(url, on_progress_callback=on_progress, client='ANDROID')
         
         video_title_label.configure(text=yt_object.title)
@@ -87,7 +87,6 @@ def search_logic():
         
         if not resolutions:
             update_status("No MP4 streams found", ERROR_COLOR)
-            search_btn.configure(state="normal")
             return
 
         res_menu.configure(values=resolutions)
@@ -100,6 +99,11 @@ def search_logic():
         update_status(f"Error: {str(e)}", ERROR_COLOR) 
         print(e)
     finally:
+        # --- ANIMATION STOP ---
+        progress_bar.stop()
+        progress_bar.configure(mode="determinate")
+        progress_bar.set(0)
+        # ----------------------
         search_btn.configure(state="normal")
 
 def download_logic():
@@ -156,7 +160,7 @@ def run_download(): threading.Thread(target=download_logic).start()
 root = customtkinter.CTk()
 root.geometry("600x550")
 root.title(f"{APP_NAME} | High-Res Downloader")
-root.title(f"{APP_NAME} | High-Res Downloader")
+
 try:
     root.iconbitmap("icon.ico")
 except:
@@ -218,5 +222,12 @@ download_btn.pack(pady=20, padx=40, fill="x")
 
 footer = customtkinter.CTkLabel(root, text="Powered by Python & FFmpeg", font=("Arial", 10), text_color="#444")
 footer.pack(side="bottom", pady=10)
+
+# --- FOCUS FIX (For Unclickable Buttons) ---
+root.update()
+root.lift()
+root.attributes('-topmost', True)
+root.after_idle(root.attributes, '-topmost', False)
+# -------------------------------------------
 
 root.mainloop()
