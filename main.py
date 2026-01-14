@@ -144,6 +144,11 @@ def run_download(): threading.Thread(target=download_logic).start()
 root = customtkinter.CTk()
 root.geometry("600x550")
 root.title(f"{APP_NAME} | High-Res Downloader")
+root.title(f"{APP_NAME} | High-Res Downloader")
+try:
+    root.iconbitmap("icon.ico")
+except:
+    pass
 root.resizable(False, False)
 
 header_frame = customtkinter.CTkFrame(root, corner_radius=0, fg_color="transparent")
