@@ -1,0 +1,53 @@
+name: Build Vortex App with Icons
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    # --- WINDOWS BUILD STEP ---
+    - name: Build Windows Exe
+      if: matrix.os == 'windows-latest'
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --collect-all customtkinter main.py
+
+    # --- MAC BUILD STEP ---
+    - name: Build Mac App
+      if: matrix.os == 'macos-latest'
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter --target-architecture universal2 main.py
+
+    # --- LINUX BUILD STEP ---
+    - name: Build Linux Binary
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Linux binaries don't support embedded icons the same way, so we skip the flag
+        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --collect-all customtkinter main.py
+
+    # --- UPLOAD THE RESULT ---
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Vortex-${{ matrix.os }}
+        path: dist/
