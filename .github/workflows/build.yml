@@ -1,54 +1,74 @@
-name: Build Vortex App with Icons
+name: Build and Release App
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    tags:
+      - 'v*' # Triggers only when you push a tag like v1.0, v2.0, etc.
+
+permissions:
+  contents: write # Required to create releases
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  build-and-release:
+    name: Build for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install Dependencies
-      run: |
-        pip install -r requirements.txt
-        pip install pyinstaller pillow
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
 
-    # --- WINDOWS BUILD STEP ---
-    - name: Build Windows Exe
-      if: matrix.os == 'windows-latest'
-      run: |
-        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --collect-all customtkinter main.py
+      # --- BUILD STEPS ---
+      
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
+        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --collect-all customtkinter main.py
 
-    # --- MAC BUILD STEP ---
-    - name: Build Mac App
-      if: matrix.os == 'macos-latest'
-      run: |
-        # Removed '--target-architecture universal2' to fix the fat binary error
-        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter main.py
-    # --- LINUX BUILD STEP ---
-    - name: Build Linux Binary
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        # Linux binaries don't support embedded icons the same way, so we skip the flag
-        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --collect-all customtkinter main.py
+      - name: Build Mac
+        if: matrix.os == 'macos-latest'
+        # Note: Removed universal2 flag to prevent the error you saw earlier
+        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter main.py
 
-    # --- UPLOAD THE RESULT ---
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Vortex-${{ matrix.os }}
-        path: dist/
+      - name: Build Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --collect-all customtkinter main.py
+
+      # --- ZIP STEPS (Pack into archives) ---
+      
+      - name: Zip Windows Build
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd dist
+          powershell Compress-Archive -Path Vortex.exe -DestinationPath Vortex-Windows.zip
+
+      - name: Zip Mac Build
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd dist
+          zip -r Vortex-Mac.zip Vortex.app
+
+      - name: Zip Linux Build
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd dist
+          zip -r Vortex-Linux.zip Vortex
+
+      # --- RELEASE STEP ---
+      
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
