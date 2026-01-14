@@ -10,7 +10,6 @@ Vortex is a sleek, dark-themed GUI application that bypasses YouTube's resolutio
 - **High Resolution Support:** Downloads true 1080p and 4K video (bypassing the 720p limit).
 - **Smart Merging:** Automatically detects if a merge is needed and uses FFmpeg to combine audio/video.
 - **Modern UI:** Built with `CustomTkinter` for a clean "Cyberpunk" aesthetic.
-- **Format Options:** Choose between MP4 Video or extract MP3 Audio.
 
 ## 🛠️ Installation
 
