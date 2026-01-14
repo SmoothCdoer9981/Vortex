@@ -36,8 +36,8 @@ jobs:
     - name: Build Mac App
       if: matrix.os == 'macos-latest'
       run: |
-        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter --target-architecture universal2 main.py
-
+        # Removed '--target-architecture universal2' to fix the fat binary error
+        pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter main.py
     # --- LINUX BUILD STEP ---
     - name: Build Linux Binary
       if: matrix.os == 'ubuntu-latest'
