@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v3
@@ -35,11 +35,6 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --collect-all customtkinter main.py
 
-      - name: Build Mac
-        if: matrix.os == 'macos-latest'
-        # Note: Removed universal2 flag to prevent the error you saw earlier
-        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.icns" --collect-all customtkinter main.py
-
       - name: Build Linux
         if: matrix.os == 'ubuntu-latest'
         run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --collect-all customtkinter main.py
@@ -51,12 +46,6 @@ jobs:
         run: |
           cd dist
           powershell Compress-Archive -Path Vortex.exe -DestinationPath Vortex-Windows.zip
-
-      - name: Zip Mac Build
-        if: matrix.os == 'macos-latest'
-        run: |
-          cd dist
-          zip -r Vortex-Mac.zip Vortex.app
 
       - name: Zip Linux Build
         if: matrix.os == 'ubuntu-latest'
