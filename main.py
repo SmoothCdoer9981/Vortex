@@ -5,6 +5,18 @@ import subprocess
 from tkinter import filedialog
 from pytubefix import YouTube
 
+
+import ssl
+import certifi
+
+
+os.environ["SSL_CERT_FILE"] = certifi.where()
+ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
+
+
+
+
+
 APP_NAME = "Vortex"
 THEME_COLOR = "dark-blue"
 ACCENT_COLOR = "#FF9900"

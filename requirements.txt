@@ -1,2 +1,3 @@
 customtkinter
 pytubefix
+certifi
