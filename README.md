@@ -16,5 +16,5 @@ Vortex is a sleek, dark-themed GUI application that bypasses YouTube's resolutio
 
 1. **Clone the repository**
    ```bash
-   git clone [https://github.com/SmootCdoer9981/Vortex.git](https://github.com/SmoothCdoer9981/Vortex.git)
+   git clone [https://github.com/SmoothCdoer9981/Vortex.git](https://github.com/SmoothCdoer9981/Vortex.git)
    cd Vortex
