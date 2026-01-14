@@ -85,7 +85,7 @@ def search_logic():
         update_status("Ready to download", SUCCESS_COLOR)
         
     except Exception as e:
-        update_status("Invalid Link or Network Error", ERROR_COLOR)
+        update_status(f"Error: {str(e)}", ERROR_COLOR) 
         print(e)
     finally:
         search_btn.configure(state="normal")
