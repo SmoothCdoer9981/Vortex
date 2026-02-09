@@ -1,4 +1,4 @@
-# Vortex 🌪️
+# Vortex
 **The Modern High-Resolution YouTube Downloader**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
@@ -8,12 +8,12 @@ Vortex is a sleek, dark-themed GUI application that bypasses YouTube's resolutio
 
 ![screenshot](assets/screenshot.png)
 
-## 🚀 Features
+## Features
 - **High Resolution Support:** Downloads true 1080p and 4K video (bypassing the 720p limit).
 - **Smart Merging:** Automatically detects if a merge is needed and uses FFmpeg to combine audio/video.
 - **Modern UI:** Built with `CustomTkinter` for a clean "Cyberpunk" aesthetic.
 
-## 🛠️ Installation
+## Installation
 
 1. **Clone the repository**
    ```bash
