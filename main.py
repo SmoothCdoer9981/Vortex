@@ -36,13 +36,6 @@ def thread_safe_update(func, *args, **kwargs):
 def sanitize_filename(name):
     return "".join([c for c in name if c.isalpha() or c.isdigit() or c==' ' or c=='-']).rstrip()
 
-def select_folder():
-    global download_path
-    folder_selected = filedialog.askdirectory()
-    if folder_selected:
-        download_path = folder_selected
-        path_display.configure(text=f".../{os.path.basename(download_path)}")
-
 def update_status(message, color="white"):
     thread_safe_update(lambda: status_label.configure(text=message, text_color=color))
 
@@ -51,6 +44,13 @@ def update_progress(percentage, text):
         progress_label.configure(text=text)
         progress_bar.set(percentage)
     thread_safe_update(_update)
+
+def select_folder():
+    global download_path
+    folder_selected = filedialog.askdirectory()
+    if folder_selected:
+        download_path = folder_selected
+        path_display.configure(text=f".../{os.path.basename(download_path)}")
 
 def on_progress(stream, chunk, bytes_remaining):
     global last_progress
@@ -107,12 +107,15 @@ def search_logic():
         
         streams = yt_object.streams.filter(only_video=True, file_extension='mp4')
         
-        def get_res_val(s):
-            try: return int(s.resolution[:-1]) if s.resolution else 0
-            except: return 0
+        unique_res = list(set([s.resolution for s in streams if s.resolution]))
+        
+        def get_res_val(res_string):
+            try:
+                return int("".join([c for c in res_string if c.isdigit()]))
+            except: 
+                return 0
 
-        resolutions = sorted(list(set([s.resolution for s in streams if s.resolution])), 
-                             key=get_res_val, reverse=True)
+        resolutions = sorted(unique_res, key=get_res_val, reverse=True)
         
         if not resolutions:
             update_status("No MP4 streams found", ERROR_COLOR)
