@@ -7,6 +7,8 @@ from pytubefix import YouTube
 import ssl
 import certifi
 
+last_progress = -1
+
 #SSL fix
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
@@ -37,13 +39,18 @@ def update_status(message, color="white"):
     status_label.configure(text=message, text_color=color)
 
 def on_progress(stream, chunk, bytes_remaining):
+    global last_progress
     total_size = stream.filesize
     bytes_downloaded = total_size - bytes_remaining
     percentage = bytes_downloaded / total_size
-    
-    per_text = f"{int(percentage * 100)}%"
-    progress_label.configure(text=per_text)
-    progress_bar.set(percentage)
+
+    current_prog_int = int(percentage * 100)
+    if current_prog_int > last_progress or current_prog_int == 0:
+        per_text = f"{current_prog_int}%"
+        update_progress(percentage, per_text)
+        last_progress = current_prog_int
+        if current_prog_int == 100:
+            last_progress = -1
 
 def merge_files(video_path, audio_path, output_path):
     try:
