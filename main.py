@@ -1,20 +1,16 @@
 import os
+import sys
 import customtkinter
 import threading
 import subprocess
 from tkinter import filedialog
 from pytubefix import YouTube
-import ssl
 import certifi
 
-last_progress = -1
-
-#SSL fix
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
 APP_NAME = "Vortex"
 THEME_COLOR = "dark-blue"
-ACCENT_COLOR = "#FF9900"
 SUCCESS_COLOR = "#2CC985"
 ERROR_COLOR = "#FF4B4B"
 
@@ -24,6 +20,18 @@ customtkinter.set_default_color_theme(THEME_COLOR)
 user_home = os.path.expanduser("~")
 download_path = os.path.join(user_home, 'Downloads')
 yt_object = None  
+last_progress = -1
+
+def get_ffmpeg_path():
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, "ffmpeg") if os.name != 'nt' else os.path.join(sys._MEIPASS, "ffmpeg.exe")
+    return "ffmpeg"
+
+def thread_safe_update(func, *args, **kwargs):
+    def wrapper():
+        func(*args, **kwargs)
+        root.update_idletasks() 
+    root.after(0, wrapper)
 
 def sanitize_filename(name):
     return "".join([c for c in name if c.isalpha() or c.isdigit() or c==' ' or c=='-']).rstrip()
@@ -36,29 +44,44 @@ def select_folder():
         path_display.configure(text=f".../{os.path.basename(download_path)}")
 
 def update_status(message, color="white"):
-    status_label.configure(text=message, text_color=color)
+    thread_safe_update(lambda: status_label.configure(text=message, text_color=color))
+
+def update_progress(percentage, text):
+    def _update():
+        progress_label.configure(text=text)
+        progress_bar.set(percentage)
+    thread_safe_update(_update)
 
 def on_progress(stream, chunk, bytes_remaining):
     global last_progress
     total_size = stream.filesize
     bytes_downloaded = total_size - bytes_remaining
     percentage = bytes_downloaded / total_size
-
+    
     current_prog_int = int(percentage * 100)
+    
     if current_prog_int > last_progress or current_prog_int == 0:
         per_text = f"{current_prog_int}%"
         update_progress(percentage, per_text)
         last_progress = current_prog_int
+        
         if current_prog_int == 100:
             last_progress = -1
 
 def merge_files(video_path, audio_path, output_path):
+    ffmpeg_path = get_ffmpeg_path()
     try:
         cmd = [
-            'ffmpeg', '-y', '-i', video_path, '-i', audio_path, 
-            '-c:v', 'copy', '-c:a', 'aac', output_path
+            ffmpeg_path, '-y', '-i', video_path, '-i', audio_path, 
+            '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', output_path
         ]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo)
         return True
     except FileNotFoundError:
         return "FFMPEG_MISSING"
@@ -69,50 +92,56 @@ def search_logic():
     global yt_object
     try:
         update_status("Fetching metadata...", "#3498db")
-        search_btn.configure(state="disabled")
-        
-
-        progress_bar.configure(mode="indeterminate")
-        progress_bar.start()
+        thread_safe_update(lambda: search_btn.configure(state="disabled"))
+        thread_safe_update(lambda: progress_bar.configure(mode="indeterminate"))
+        thread_safe_update(progress_bar.start)
         
         url = url_entry.get()
         if not url:
             update_status("Please paste a URL first", ERROR_COLOR)
             return
 
-
         yt_object = YouTube(url, on_progress_callback=on_progress)
         
-        video_title_label.configure(text=yt_object.title)
+        thread_safe_update(lambda: video_title_label.configure(text=yt_object.title))
         
         streams = yt_object.streams.filter(only_video=True, file_extension='mp4')
+        
+        def get_res_val(s):
+            try: return int(s.resolution[:-1]) if s.resolution else 0
+            except: return 0
+
         resolutions = sorted(list(set([s.resolution for s in streams if s.resolution])), 
-                             key=lambda x: int(x[:-1]), reverse=True)
+                             key=get_res_val, reverse=True)
         
         if not resolutions:
             update_status("No MP4 streams found", ERROR_COLOR)
             return
-        res_menu.configure(values=resolutions)
-        res_menu.set(resolutions[0])
-        res_menu.configure(state="normal")
-        download_btn.configure(state="normal", fg_color=SUCCESS_COLOR, hover_color="#20a065")
+
+        def update_menu():
+            res_menu.configure(values=resolutions)
+            res_menu.set(resolutions[0])
+            res_menu.configure(state="normal")
+            download_btn.configure(state="normal", fg_color=SUCCESS_COLOR)
+        
+        thread_safe_update(update_menu)
         update_status("Ready to download", SUCCESS_COLOR)
         
     except Exception as e:
         update_status(f"Error: {str(e)}", ERROR_COLOR) 
         print(e)
     finally:
-        progress_bar.stop()
-        progress_bar.configure(mode="determinate")
-        progress_bar.set(0)
-        search_btn.configure(state="normal")
+        thread_safe_update(progress_bar.stop)
+        thread_safe_update(lambda: progress_bar.configure(mode="determinate"))
+        thread_safe_update(lambda: progress_bar.set(0))
+        thread_safe_update(lambda: search_btn.configure(state="normal"))
 
 def download_logic():
     global yt_object
     try:
         if not yt_object: return
         
-        download_btn.configure(state="disabled")
+        thread_safe_update(lambda: download_btn.configure(state="disabled"))
         selected_res = res_menu.get()
         safe_title = sanitize_filename(yt_object.title)
         
@@ -130,33 +159,41 @@ def download_logic():
             final_out = os.path.join(download_path, f"{safe_title}.mp4")
 
             vid_stream = yt_object.streams.filter(res=selected_res, only_video=True).first()
-            if vid_stream: vid_stream.download(download_path, filename="temp_v.mp4")
             
-            progress_bar.set(0)
-            
-            update_status("Downloading HQ Audio...", "#e67e22")
-            yt_object.streams.get_audio_only().download(download_path, filename="temp_a.mp4")
-            
-            update_status("Processing (Merging)...", "#9b59b6")
-            result = merge_files(temp_vid, temp_aud, final_out)
-            
-            if os.path.exists(temp_vid): os.remove(temp_vid)
-            if os.path.exists(temp_aud): os.remove(temp_aud)
+            if vid_stream: 
+                vid_stream.download(download_path, filename="temp_v.mp4")
+                
+                thread_safe_update(lambda: progress_bar.set(0))
+                update_status("Downloading HQ Audio...", "#e67e22")
+                
+                aud_stream = yt_object.streams.get_audio_only()
+                if aud_stream:
+                    aud_stream.download(download_path, filename="temp_a.mp4")
+                
+                    update_status("Processing (Merging)...", "#9b59b6")
+                    result = merge_files(temp_vid, temp_aud, final_out)
+                    
+                    if os.path.exists(temp_vid): os.remove(temp_vid)
+                    if os.path.exists(temp_aud): os.remove(temp_aud)
 
-            if result == True:
-                update_status("Saved to Downloads!", SUCCESS_COLOR)
-            elif result == "FFMPEG_MISSING":
-                update_status("Error: FFmpeg missing", ERROR_COLOR)
+                    if result is True:
+                        update_status("Saved to Downloads!", SUCCESS_COLOR)
+                    elif result == "FFMPEG_MISSING":
+                        update_status("Error: FFmpeg missing", ERROR_COLOR)
+                    else:
+                        update_status("Merge Failed", ERROR_COLOR)
+                else:
+                    update_status("Error: No Audio Found", ERROR_COLOR)
             else:
-                update_status("Merge Failed", ERROR_COLOR)
+                update_status(f"Error: Stream {selected_res} unavailable", ERROR_COLOR)
             
     except Exception as e:
         update_status(f"Error: {str(e)}", ERROR_COLOR)
     finally:
-        download_btn.configure(state="normal")
+        thread_safe_update(lambda: download_btn.configure(state="normal"))
 
-def run_search(): threading.Thread(target=search_logic).start()
-def run_download(): threading.Thread(target=download_logic).start()
+def run_search(): threading.Thread(target=search_logic, daemon=True).start()
+def run_download(): threading.Thread(target=download_logic, daemon=True).start()
 
 root = customtkinter.CTk()
 root.geometry("600x550")
@@ -224,8 +261,8 @@ download_btn.pack(pady=20, padx=40, fill="x")
 footer = customtkinter.CTkLabel(root, text="Powered by Python & FFmpeg", font=("Arial", 10), text_color="#444")
 footer.pack(side="bottom", pady=10)
 
-root.update()
 root.lift()
-root.attributes('-topmost', True)
-root.after_idle(root.attributes, '-topmost', False)
+root.attributes('-topmost',True)
+root.after_idle(root.attributes,'-topmost',False)
+
 root.mainloop()
