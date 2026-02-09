@@ -191,7 +191,7 @@ settings_row.pack(pady=10)
 res_menu = customtkinter.CTkOptionMenu(settings_row, values=["Quality"], state="disabled", width=120)
 res_menu.pack(side="left", padx=10)
 
-folder_btn = customtkinter.CTkButton(settings_row, text="📂 Folder", width=80, fg_color="#555", hover_color="#666", command=select_folder)
+folder_btn = customtkinter.CTkButton(settings_row, text="Folder", width=80, fg_color="#555", hover_color="#666", command=select_folder)
 folder_btn.pack(side="left", padx=10)
 
 path_display = customtkinter.CTkLabel(settings_row, text=".../Downloads", text_color="gray", font=("Arial", 10))

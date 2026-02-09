@@ -3,10 +3,10 @@ name: Build and Release App
 on:
   push:
     tags:
-      - 'v*' # Triggers only when you push a tag like v1.0, v2.0, etc.
+      - 'v*'
 
 permissions:
-  contents: write # Required to create releases
+  contents: write
 
 jobs:
   build-and-release:
@@ -14,7 +14,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            artifact_name: Vortex.exe
+            asset_name: Vortex-Windows.zip
+            ffmpeg_url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          - os: ubuntu-latest
+            artifact_name: Vortex
+            asset_name: Vortex-Linux.zip
+            ffmpeg_url: "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+          - os: macos-latest
+            artifact_name: Vortex
+            asset_name: Vortex-MacOS.zip
+            ffmpeg_url: "https://evermeet.cx/ffmpeg/getrelease/zip"
 
     steps:
       - uses: actions/checkout@v3
@@ -29,35 +41,57 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
-      # --- BUILD STEPS ---
-      
-      - name: Build Windows
+      # --- FETCH FFMPEG (OS SPECIFIC) ---
+
+      - name: Download FFmpeg (Windows)
         if: matrix.os == 'windows-latest'
-        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --collect-all customtkinter main.py
+        run: |
+          curl -L -o ffmpeg.zip ${{ matrix.ffmpeg_url }}
+          7z e ffmpeg.zip *.exe -r
+          Move-Item ffmpeg.exe -Destination .
 
-      - name: Build Linux
+      - name: Download FFmpeg (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --collect-all customtkinter main.py
+        run: |
+          curl -L -o ffmpeg.tar.xz ${{ matrix.ffmpeg_url }}
+          tar -xvf ffmpeg.tar.xz
+          mv ffmpeg-*-static/ffmpeg .
+          chmod +x ffmpeg
 
-      # --- ZIP STEPS (Pack into archives) ---
-      
-      - name: Zip Windows Build
+      - name: Download FFmpeg (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          curl -L -o ffmpeg.zip ${{ matrix.ffmpeg_url }}
+          unzip ffmpeg.zip
+          chmod +x ffmpeg
+
+
+      - name: Build with PyInstaller (Windows)
+        if: matrix.os == 'windows-latest'
+
+        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --icon "icon.ico" --add-data "ffmpeg.exe;." --collect-all customtkinter main.py
+
+      - name: Build with PyInstaller (Linux/Mac)
+        if: matrix.os != 'windows-latest'
+
+        run: pyinstaller --noconfirm --onefile --windowed --name "Vortex" --add-data "ffmpeg:." --collect-all customtkinter main.py
+
+
+      - name: Zip Build (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd dist
-          powershell Compress-Archive -Path Vortex.exe -DestinationPath Vortex-Windows.zip
+          powershell Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath ${{ matrix.asset_name }}
 
-      - name: Zip Linux Build
-        if: matrix.os == 'ubuntu-latest'
+      - name: Zip Build (Linux/Mac)
+        if: matrix.os != 'windows-latest'
         run: |
           cd dist
-          zip -r Vortex-Linux.zip Vortex
+          zip -r ${{ matrix.asset_name }} ${{ matrix.artifact_name }}
 
-      # --- RELEASE STEP ---
-      
-      - name: Upload to Release
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.zip
+          files: dist/${{ matrix.asset_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
