@@ -9,6 +9,7 @@ import certifi
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
+# --- Configuration ---
 APP_NAME = "Vortex"
 THEME_COLOR = "dark-blue"
 SUCCESS_COLOR = "#2CC985"
@@ -21,6 +22,8 @@ user_home = os.path.expanduser("~")
 download_path = os.path.join(user_home, 'Downloads')
 yt_object = None  
 last_progress = -1
+
+# --- Logic Functions ---
 
 def get_ffmpeg_path():
     if hasattr(sys, '_MEIPASS'):
@@ -57,34 +60,38 @@ def on_progress(stream, chunk, bytes_remaining):
     total_size = stream.filesize
     bytes_downloaded = total_size - bytes_remaining
     percentage = bytes_downloaded / total_size
-    
     current_prog_int = int(percentage * 100)
     
     if current_prog_int > last_progress or current_prog_int == 0:
         per_text = f"{current_prog_int}%"
         update_progress(percentage, per_text)
         last_progress = current_prog_int
-        
         if current_prog_int == 100:
             last_progress = -1
 
-def merge_files(video_path, audio_path, output_path):
+def convert_to_mp3(input_path, output_path):
     ffmpeg_path = get_ffmpeg_path()
     try:
-        cmd = [
-            ffmpeg_path, '-y', '-i', video_path, '-i', audio_path, 
-            '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', output_path
-        ]
-        
+        cmd = [ffmpeg_path, '-y', '-i', input_path, '-vn', '-ab', '192k', '-ar', '44100', '-y', output_path]
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo)
         return True
-    except FileNotFoundError:
-        return "FFMPEG_MISSING"
+    except Exception as e:
+        return str(e)
+
+def merge_files(video_path, audio_path, output_path):
+    ffmpeg_path = get_ffmpeg_path()
+    try:
+        cmd = [ffmpeg_path, '-y', '-i', video_path, '-i', audio_path, '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', output_path]
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo)
+        return True
     except Exception as e:
         return str(e)
 
@@ -102,28 +109,21 @@ def search_logic():
             return
 
         yt_object = YouTube(url, on_progress_callback=on_progress)
-        
         thread_safe_update(lambda: video_title_label.configure(text=yt_object.title))
         
         streams = yt_object.streams.filter(only_video=True, file_extension='mp4')
-        
         unique_res = list(set([s.resolution for s in streams if s.resolution]))
         
         def get_res_val(res_string):
-            try:
-                return int("".join([c for c in res_string if c.isdigit()]))
-            except: 
-                return 0
+            try: return int("".join([c for c in res_string if c.isdigit()]))
+            except: return 0
 
-        resolutions = sorted(unique_res, key=get_res_val, reverse=True)
+        options = sorted(unique_res, key=get_res_val, reverse=True)
+        options.append("Audio (MP3)")
         
-        if not resolutions:
-            update_status("No MP4 streams found", ERROR_COLOR)
-            return
-
         def update_menu():
-            res_menu.configure(values=resolutions)
-            res_menu.set(resolutions[0])
+            res_menu.configure(values=options)
+            res_menu.set(options[0])
             res_menu.configure(state="normal")
             download_btn.configure(state="normal", fg_color=SUCCESS_COLOR)
         
@@ -132,7 +132,6 @@ def search_logic():
         
     except Exception as e:
         update_status(f"Error: {str(e)}", ERROR_COLOR) 
-        print(e)
     finally:
         thread_safe_update(progress_bar.stop)
         thread_safe_update(lambda: progress_bar.configure(mode="determinate"))
@@ -143,79 +142,71 @@ def download_logic():
     global yt_object
     try:
         if not yt_object: return
-        
         thread_safe_update(lambda: download_btn.configure(state="disabled"))
-        selected_res = res_menu.get()
-        safe_title = sanitize_filename(yt_object.title)
         
-        prog_stream = yt_object.streams.filter(progressive=True, res=selected_res, file_extension='mp4').first()
+        selected_option = res_menu.get()
+        safe_title = sanitize_filename(yt_object.title)
 
-        if prog_stream:
-            update_status(f"Downloading {selected_res} (Fast)...", "#3498db")
-            prog_stream.download(download_path, filename=f"{safe_title}.mp4")
-            update_status("Download Complete!", SUCCESS_COLOR)
+        if selected_option == "Audio (MP3)":
+            update_status("Downloading Audio...", "#3498db")
+            aud_stream = yt_object.streams.get_audio_only()
+            temp_aud = aud_stream.download(download_path, filename="temp_audio_file")
+            final_mp3 = os.path.join(download_path, f"{safe_title}.mp3")
+            
+            update_status("Converting to MP3...", "#9b59b6")
+            res = convert_to_mp3(temp_aud, final_mp3)
+            if os.path.exists(temp_aud): os.remove(temp_aud)
+            
+            if res is True: update_status("MP3 Saved!", SUCCESS_COLOR)
+            else: update_status("Conversion Failed", ERROR_COLOR)
+
         else:
-            update_status(f"Downloading HQ Video ({selected_res})...", "#e67e22")
-            
-            temp_vid = os.path.join(download_path, "temp_v.mp4")
-            temp_aud = os.path.join(download_path, "temp_a.mp4")
-            final_out = os.path.join(download_path, f"{safe_title}.mp4")
-
-            vid_stream = yt_object.streams.filter(res=selected_res, only_video=True).first()
-            
-            if vid_stream: 
-                vid_stream.download(download_path, filename="temp_v.mp4")
-                
-                thread_safe_update(lambda: progress_bar.set(0))
-                update_status("Downloading HQ Audio...", "#e67e22")
-                
-                aud_stream = yt_object.streams.get_audio_only()
-                if aud_stream:
-                    aud_stream.download(download_path, filename="temp_a.mp4")
-                
-                    update_status("Processing (Merging)...", "#9b59b6")
-                    result = merge_files(temp_vid, temp_aud, final_out)
-                    
-                    if os.path.exists(temp_vid): os.remove(temp_vid)
-                    if os.path.exists(temp_aud): os.remove(temp_aud)
-
-                    if result is True:
-                        update_status("Saved to Downloads!", SUCCESS_COLOR)
-                    elif result == "FFMPEG_MISSING":
-                        update_status("Error: FFmpeg missing", ERROR_COLOR)
-                    else:
-                        update_status("Merge Failed", ERROR_COLOR)
-                else:
-                    update_status("Error: No Audio Found", ERROR_COLOR)
+            # Video Logic
+            prog_stream = yt_object.streams.filter(progressive=True, res=selected_option, file_extension='mp4').first()
+            if prog_stream:
+                update_status(f"Downloading {selected_option}...", "#3498db")
+                prog_stream.download(download_path, filename=f"{safe_title}.mp4")
+                update_status("Download Complete!", SUCCESS_COLOR)
             else:
-                update_status(f"Error: Stream {selected_res} unavailable", ERROR_COLOR)
+                update_status("Downloading HQ Video/Audio...", "#e67e22")
+                temp_vid = os.path.join(download_path, "temp_v.mp4")
+                temp_aud = os.path.join(download_path, "temp_a.mp4")
+                final_out = os.path.join(download_path, f"{safe_title}.mp4")
+
+                vid_stream = yt_object.streams.filter(res=selected_option, only_video=True).first()
+                aud_stream = yt_object.streams.get_audio_only()
+                
+                vid_stream.download(download_path, filename="temp_v.mp4")
+                thread_safe_update(lambda: progress_bar.set(0))
+                aud_stream.download(download_path, filename="temp_a.mp4")
+                
+                update_status("Merging...", "#9b59b6")
+                result = merge_files(temp_vid, temp_aud, final_out)
+                if os.path.exists(temp_vid): os.remove(temp_vid)
+                if os.path.exists(temp_aud): os.remove(temp_aud)
+                
+                if result is True: update_status("Video Saved!", SUCCESS_COLOR)
+                else: update_status("Merge Failed", ERROR_COLOR)
             
     except Exception as e:
         update_status(f"Error: {str(e)}", ERROR_COLOR)
     finally:
         thread_safe_update(lambda: download_btn.configure(state="normal"))
 
+# --- GUI Setup ---
 def run_search(): threading.Thread(target=search_logic, daemon=True).start()
 def run_download(): threading.Thread(target=download_logic, daemon=True).start()
 
 root = customtkinter.CTk()
 root.geometry("600x550")
-root.title(f"{APP_NAME} | High-Res Downloader")
-
-try:
-    root.iconbitmap("icon.ico")
-except:
-    pass
+root.title(f"{APP_NAME} | Media Downloader")
 root.resizable(False, False)
 
 header_frame = customtkinter.CTkFrame(root, corner_radius=0, fg_color="transparent")
 header_frame.pack(pady=20)
 
-app_logo = customtkinter.CTkLabel(header_frame, text="VORTEX", font=("Futura", 32, "bold"), text_color="white")
-app_logo.pack()
-
-subtitle = customtkinter.CTkLabel(header_frame, text="YouTube Downloader & Converter", font=("Arial", 12), text_color="gray")
-subtitle.pack()
+customtkinter.CTkLabel(header_frame, text="VORTEX", font=("Futura", 32, "bold"), text_color="white").pack()
+customtkinter.CTkLabel(header_frame, text="YouTube Downloader & MP3 Converter", font=("Arial", 12), text_color="gray").pack()
 
 input_frame = customtkinter.CTkFrame(root, fg_color="transparent")
 input_frame.pack(pady=10, padx=20, fill="x")
@@ -235,7 +226,7 @@ video_title_label.pack(pady=(15, 5), padx=10)
 settings_row = customtkinter.CTkFrame(info_frame, fg_color="transparent")
 settings_row.pack(pady=10)
 
-res_menu = customtkinter.CTkOptionMenu(settings_row, values=["Quality"], state="disabled", width=120)
+res_menu = customtkinter.CTkOptionMenu(settings_row, values=["Format"], state="disabled", width=140)
 res_menu.pack(side="left", padx=10)
 
 folder_btn = customtkinter.CTkButton(settings_row, text="Folder", width=80, fg_color="#555", hover_color="#666", command=select_folder)
@@ -257,15 +248,8 @@ progress_bar = customtkinter.CTkProgressBar(root, height=12, progress_color=SUCC
 progress_bar.set(0)
 progress_bar.pack(pady=5, padx=20, fill="x")
 
-download_btn = customtkinter.CTkButton(root, text="DOWNLOAD VIDEO", height=50, command=run_download, 
+download_btn = customtkinter.CTkButton(root, text="DOWNLOAD", height=50, command=run_download, 
                                        font=("Arial", 18, "bold"), state="disabled", fg_color="#444")
 download_btn.pack(pady=20, padx=40, fill="x")
-
-footer = customtkinter.CTkLabel(root, text="Powered by Python & FFmpeg", font=("Arial", 10), text_color="#444")
-footer.pack(side="bottom", pady=10)
-
-root.lift()
-root.attributes('-topmost',True)
-root.after_idle(root.attributes,'-topmost',False)
 
 root.mainloop()
